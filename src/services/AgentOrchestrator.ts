@@ -1,0 +1,259 @@
+import { CanvasComponent, AgentMessage } from '../types';
+import { layoutEngine } from './LayoutEngine';
+
+interface AgentResponse {
+  type: 'component' | 'message' | 'suggestion';
+  payload: any;
+  streaming?: boolean;
+}
+
+export interface StreamingUpdate {
+  stage: 'analyzing' | 'processing' | 'generating' | 'complete';
+  message: string;
+  progress?: number;
+}
+
+interface AgentCapability {
+  name: string;
+  description: string;
+  canHandle: (query: string) => boolean;
+  execute: (query: string, context: any) => Promise<AgentResponse>;
+}
+
+class MockAgentOrchestrator {
+  private capabilities: AgentCapability[] = [];
+  private messageCallbacks: Array<(message: AgentMessage) => void> = [];
+  private streamingCallbacks: Array<(update: StreamingUpdate) => void> = [];
+
+  constructor() {
+    this.initializeAgents();
+  }
+
+  private initializeAgents() {
+    // Calculation Agent
+    this.capabilities.push({
+      name: 'Calculation Agent',
+      description: 'Handles financial calculations and scenario modeling',
+      canHandle: (query) => query.toLowerCase().includes('roi') || 
+                            query.toLowerCase().includes('scenario') ||
+                            query.toLowerCase().includes('cost'),
+      execute: async (query, context) => {
+        if (query.includes('scenario')) {
+          return {
+            type: 'component',
+            payload: {
+              type: 'interactive-chart',
+              position: { x: 50, y: 400 },
+              size: { width: 500, height: 300 },
+              props: {
+                title: 'ROI Scenario Analysis',
+                type: 'bar',
+                data: [
+                  { name: 'Conservative', value: 180, id: 'conservative', color: '#ef4444' },
+                  { name: 'Likely', value: 245, id: 'likely', color: '#3b82f6' },
+                  { name: 'Optimistic', value: 320, id: 'optimistic', color: '#10b981' }
+                ],
+                config: { showValue: true, showLegend: true }
+              }
+            }
+          };
+        }
+        return { type: 'message', payload: { content: 'Calculating...' } };
+      }
+    });
+
+    // Assumption Agent  
+    this.capabilities.push({
+      name: 'Assumption Agent',
+      description: 'Manages data inputs and validates assumptions',
+      canHandle: (query) => query.toLowerCase().includes('assumption') ||
+                            query.toLowerCase().includes('data') ||
+                            query.toLowerCase().includes('benchmark'),
+      execute: async (query, context) => {
+        return {
+          type: 'component',
+          payload: {
+            type: 'data-table',
+            position: { x: 50, y: 250 },
+            size: { width: 600, height: 200 },
+            props: {
+              title: 'Key Assumptions',
+              headers: ['Assumption', 'Value', 'Source', 'Confidence'],
+              rows: [
+                ['User Adoption Rate', '85%', 'Industry Benchmark', 'High'],
+                ['Efficiency Gain', '15%', 'Vendor Claims', 'Medium'],
+                ['Implementation Time', '3 months', 'Historical Data', 'High']
+              ],
+              editableColumns: [1]
+            }
+          }
+        };
+      }
+    });
+
+    // Visualization Agent
+    this.capabilities.push({
+      name: 'Visualization Agent',
+      description: 'Creates charts and visual representations',
+      canHandle: (query) => query.toLowerCase().includes('chart') ||
+                            query.toLowerCase().includes('visual') ||
+                            query.toLowerCase().includes('breakdown'),
+      execute: async (query, context) => {
+        if (query.includes('breakdown')) {
+          return {
+            type: 'component',
+            payload: {
+              type: 'interactive-chart',
+              position: { x: 400, y: 200 },
+              size: { width: 450, height: 300 },
+              props: {
+                title: 'Cost Breakdown Analysis',
+                type: 'pie',
+                data: [
+                  { name: 'Software Licenses', value: 120000, id: 'licenses', color: '#3b82f6' },
+                  { name: 'Implementation', value: 75000, id: 'implementation', color: '#10b981' },
+                  { name: 'Training', value: 25000, id: 'training', color: '#f59e0b' },
+                  { name: 'Ongoing Support', value: 35000, id: 'support', color: '#ef4444' }
+                ],
+                config: { showValue: true, showLegend: true }
+              }
+            }
+          };
+        }
+        return { type: 'message', payload: { content: 'Creating visualization...' } };
+      }
+    });
+  }
+
+  async processQuery(query: string, context: any = {}): Promise<AgentResponse | null> {
+    const capability = this.capabilities.find(cap => cap.canHandle(query));
+
+    if (capability) {
+      this.notifyActivity({
+        agent: capability.name,
+        title: 'Processing request',
+        content: `Analyzing: "${query}"`
+      });
+
+      this.notifyStreaming({
+        stage: 'analyzing',
+        message: 'Understanding your request...',
+        progress: 25
+      });
+
+      await this.delay(500);
+
+      this.notifyStreaming({
+        stage: 'processing',
+        message: 'Analyzing context and dependencies...',
+        progress: 50
+      });
+
+      await this.delay(500);
+
+      this.notifyStreaming({
+        stage: 'generating',
+        message: 'Creating component...',
+        progress: 75
+      });
+
+      const response = await capability.execute(query, context);
+
+      if (response.type === 'component' && context.components) {
+        const optimalPosition = layoutEngine.suggestOptimalPosition(
+          response.payload,
+          context.components
+        );
+        response.payload.position = optimalPosition;
+      }
+
+      this.notifyStreaming({
+        stage: 'complete',
+        message: 'Ready to place on canvas',
+        progress: 100
+      });
+
+      this.notifyActivity({
+        agent: capability.name,
+        title: 'Request completed',
+        content: `Generated ${response.type} for your query`
+      });
+
+      return response;
+    }
+
+    return null;
+  }
+
+  private delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  private notifyActivity(activity: { agent: string; title: string; content: string }) {
+    const message: AgentMessage = {
+      id: `activity-${Date.now()}`,
+      type: 'activity',
+      timestamp: new Date(),
+      ...activity
+    };
+
+    this.messageCallbacks.forEach(callback => callback(message));
+  }
+
+  onMessage(callback: (message: AgentMessage) => void) {
+    this.messageCallbacks.push(callback);
+  }
+
+  onStreaming(callback: (update: StreamingUpdate) => void) {
+    this.streamingCallbacks.push(callback);
+  }
+
+  private notifyStreaming(update: StreamingUpdate) {
+    this.streamingCallbacks.forEach(callback => callback(update));
+  }
+
+  async processQueryWithContext(query: string, context: any = {}): Promise<AgentResponse | null> {
+    const lowerQuery = query.toLowerCase();
+
+    if (context.selectedComponent && !lowerQuery.includes('new')) {
+      const componentContext = `Refining ${context.selectedComponent.type}: ${context.selectedComponent.props.title || 'component'}`;
+
+      this.notifyStreaming({
+        stage: 'analyzing',
+        message: componentContext,
+        progress: 30
+      });
+
+      await this.delay(800);
+    }
+
+    return this.processQuery(query, context);
+  }
+
+  generateSuggestion(context: any) {
+    const suggestions = [
+      {
+        agent: 'Calculation Agent',
+        title: 'Scenario analysis recommended',
+        content: 'Your ROI calculation shows high sensitivity to user adoption rates. Consider creating best/worst case scenarios.',
+        actions: [
+          { label: 'Create Scenarios', action: 'create-scenarios' },
+          { label: 'Dismiss', action: 'dismiss' }
+        ]
+      },
+      {
+        agent: 'Assumption Agent',
+        title: 'Data validation needed',
+        content: 'Some assumptions haven\'t been updated in 30 days. Would you like to refresh from latest benchmarks?',
+        actions: [
+          { label: 'Refresh Data', action: 'refresh-data' },
+          { label: 'Skip', action: 'skip' }
+        ]
+      }
+    ];
+
+    return suggestions[Math.floor(Math.random() * suggestions.length)];
+  }
+}
+
+export const agentOrchestrator = new MockAgentOrchestrator();
