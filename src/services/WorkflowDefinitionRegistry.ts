@@ -21,8 +21,7 @@ export class WorkflowDefinitionRegistry {
 
   async upsertDefinition(definition: WorkflowDAG, isActive = true): Promise<void> {
     const dagSchema: WorkflowDAG = {
-      ...definition,
-      version: definition.version
+      ...definition
     };
 
     const { error } = await this.db
