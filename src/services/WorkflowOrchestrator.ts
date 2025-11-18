@@ -229,7 +229,7 @@ export class WorkflowOrchestrator {
         const duration = Date.now() - attemptStartedAt;
 
         await this.completeExecutionLog(logId, 'failed', duration, null, lastError.message);
-        this.recordCircuitBreakerFailure(circuitBreakerKey);
+        this.recordCircuitBreakerFailure(executionId, stage.id, circuitBreakerKey);
         await this.persistCircuitBreakerState(executionId, circuitBreakerKey);
 
         if (attempt < retryConfig.max_attempts) {
@@ -357,7 +357,7 @@ export class WorkflowOrchestrator {
     return this.circuitBreakers.get(key)!;
   }
 
-  private recordCircuitBreakerFailure(key: string): void {
+  private recordCircuitBreakerFailure(executionId: string, stageId: string, key: string): void {
     const breaker = this.getOrCreateCircuitBreaker(key);
     breaker.failure_count++;
     breaker.last_failure_time = new Date().toISOString();
@@ -365,8 +365,8 @@ export class WorkflowOrchestrator {
     if (breaker.failure_count >= breaker.threshold) {
       breaker.state = 'open';
       void this.emitAuditEvent(
-        key.split('-')[0],
-        key.split('-')[1] || null,
+        executionId,
+        stageId,
         'circuit_opened',
         'error',
         { key, failure_count: breaker.failure_count, threshold: breaker.threshold }
