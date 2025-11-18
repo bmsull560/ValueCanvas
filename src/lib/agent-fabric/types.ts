@@ -59,6 +59,7 @@ export interface Workflow {
 }
 
 export interface DAGDefinition {
+  version: number;
   nodes: DAGNode[];
   quality_check: QualityCheck;
 }

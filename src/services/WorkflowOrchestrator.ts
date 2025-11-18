@@ -13,23 +13,22 @@ import {
 import { LIFECYCLE_WORKFLOW_DEFINITIONS } from '../data/lifecycleWorkflows';
 import { agentRoutingLayer } from './AgentRoutingLayer';
 import { workflowCompensation } from './WorkflowCompensation';
+import {
+  WorkflowDefinitionRegistry,
+  type WorkflowDefinitionRecord
+} from './WorkflowDefinitionRegistry';
 
 export class WorkflowOrchestrator {
   private circuitBreakers: Map<string, CircuitBreakerState> = new Map();
+  private definitionRegistry: WorkflowDefinitionRegistry;
+
+  constructor(definitionRegistry = new WorkflowDefinitionRegistry(supabase)) {
+    this.definitionRegistry = definitionRegistry;
+  }
 
   async registerLifecycleDefinitions(): Promise<void> {
     for (const definition of LIFECYCLE_WORKFLOW_DEFINITIONS) {
-      await supabase
-        .from('workflow_definitions')
-        .upsert({
-          name: definition.name,
-          description: definition.description,
-          version: definition.version,
-          dag_schema: definition,
-          is_active: true
-        }, {
-          onConflict: 'name,version'
-        });
+      await this.definitionRegistry.upsertDefinition(definition);
     }
   }
 
@@ -48,12 +47,35 @@ export class WorkflowOrchestrator {
       throw new Error(`Workflow definition not found: ${workflowDefinitionId}`);
     }
 
-    const dag: WorkflowDAG = definition.dag_schema as WorkflowDAG;
+    const record = definition as WorkflowDefinitionRecord;
+    const compatibility = this.definitionRegistry.validateCompatibility(record);
+    if (!compatibility.compatible) {
+      throw new Error(
+        `Incompatible workflow definition ${workflowDefinitionId}: ${compatibility.issues.join('; ')}`
+      );
+    }
 
+    return this.executeWithResolvedDefinition(record, record.dag_schema as WorkflowDAG, context);
+  }
+
+  async executeWorkflowByName(
+    name: string,
+    version?: number,
+    context: Record<string, any> = {}
+  ): Promise<string> {
+    const resolved = await this.definitionRegistry.resolve(name, version);
+    return this.executeWithResolvedDefinition(resolved, resolved.dag_schema as WorkflowDAG, context);
+  }
+
+  private async executeWithResolvedDefinition(
+    definition: WorkflowDefinitionRecord,
+    dag: WorkflowDAG,
+    context: Record<string, any>
+  ): Promise<string> {
     const { data: execution, error: execError } = await supabase
       .from('workflow_executions')
       .insert({
-        workflow_definition_id: workflowDefinitionId,
+        workflow_definition_id: definition.id,
         workflow_version: definition.version,
         status: 'initiated',
         current_stage: dag.initial_stage,

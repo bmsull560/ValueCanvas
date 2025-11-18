@@ -10,11 +10,12 @@ interface RLSConfig {
 class MockQueryBuilder {
   private filters: Array<(row: any) => boolean> = [];
   private orderBy?: { column: string; ascending: boolean };
-  private operation: 'select' | 'insert' | 'update' | 'delete' = 'select';
+  private operation: 'select' | 'insert' | 'update' | 'delete' | 'upsert' = 'select';
   private payload: any;
   private error: Error | null = null;
   private rangeFrom?: number;
   private rangeTo?: number;
+  private onConflictColumns?: string[];
 
   constructor(
     private tableName: string,
@@ -32,6 +33,16 @@ class MockQueryBuilder {
   insert(payload: any): this {
     this.operation = 'insert';
     this.payload = Array.isArray(payload) ? payload : [payload];
+    return this;
+  }
+
+  upsert(payload: any, options?: { onConflict?: string }): this {
+    this.operation = 'upsert';
+    this.payload = Array.isArray(payload) ? payload : [payload];
+    this.onConflictColumns = options?.onConflict
+      ?.split(',')
+      .map(column => column.trim())
+      .filter(Boolean);
     return this;
   }
 
@@ -113,6 +124,8 @@ class MockQueryBuilder {
     switch (this.operation) {
       case 'insert':
         return this.handleInsert();
+      case 'upsert':
+        return this.handleUpsert();
       case 'update':
         return this.handleUpdate();
       case 'delete':
@@ -160,6 +173,35 @@ class MockQueryBuilder {
     });
 
     return { data: inserted, error: null };
+  }
+
+  private handleUpsert() {
+    const table = this.tables[this.tableName] || (this.tables[this.tableName] = []);
+
+    const processed = this.payload.map((row: any, index: number) => {
+      const conflictIndex = this.findConflictIndex(table, row);
+
+      if (conflictIndex >= 0) {
+        const updated = { ...table[conflictIndex], ...row };
+        table[conflictIndex] = updated;
+        return updated;
+      }
+
+      const id = row.id || `${this.tableName}_${table.length + index + 1}`;
+      const record = { ...row, id };
+      table.push(record);
+      return record;
+    });
+
+    return { data: processed, error: null };
+  }
+
+  private findConflictIndex(table: any[], row: any) {
+    if (!this.onConflictColumns?.length) return -1;
+
+    return table.findIndex(existing =>
+      this.onConflictColumns!.every(column => existing[column] === row[column])
+    );
   }
 
   private handleUpdate() {
