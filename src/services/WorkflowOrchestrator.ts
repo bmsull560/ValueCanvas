@@ -13,6 +13,7 @@ import {
 import { LIFECYCLE_WORKFLOW_DEFINITIONS } from '../data/lifecycleWorkflows';
 import { agentRoutingLayer } from './AgentRoutingLayer';
 import { workflowCompensation } from './WorkflowCompensation';
+import { auditEventWriter, buildAuditEvent } from './AuditEventWriter';
 
 export class WorkflowOrchestrator {
   private circuitBreakers: Map<string, CircuitBreakerState> = new Map();
@@ -76,6 +77,17 @@ export class WorkflowOrchestrator {
       workflow_version: definition.version,
       context
     });
+    await auditEventWriter.record(
+      buildAuditEvent(
+        'workflow_initiated',
+        'info',
+        'workflow',
+        { workflow_name: definition.name, workflow_version: definition.version, context },
+        execution.id,
+        dag.initial_stage,
+        0
+      )
+    );
 
     this.executeDAG(execution.id, dag).catch(async (error) => {
       await this.handleWorkflowFailure(execution.id, error.message);
@@ -113,6 +125,13 @@ export class WorkflowOrchestrator {
         dependencies: route.dependencies,
         reason: route.reason
       });
+      await this.emitAuditEvent(
+        executionId,
+        stage.id,
+        'stage_routing',
+        'info',
+        { lifecycle_stage: route.lifecycle_stage, dependencies: route.dependencies, reason: route.reason }
+      );
 
       const stageResult = await this.executeStageWithRetry(executionId, stage, execution.context);
 
@@ -146,7 +165,21 @@ export class WorkflowOrchestrator {
 
       if (cooldownExpired) {
         circuitBreaker.state = 'half_open';
+        await this.emitAuditEvent(
+          executionId,
+          stage.id,
+          'circuit_half_open',
+          'warn',
+          { circuit_breaker: circuitBreaker, key: circuitBreakerKey }
+        );
       } else {
+        await this.emitAuditEvent(
+          executionId,
+          stage.id,
+          'circuit_open_block',
+          'error',
+          { circuit_breaker: circuitBreaker, key: circuitBreakerKey }
+        );
         throw new Error(`Circuit breaker open for stage: ${stage.id}`);
       }
     }
@@ -156,9 +189,17 @@ export class WorkflowOrchestrator {
 
     for (let attempt = 1; attempt <= retryConfig.max_attempts; attempt++) {
       const logId = await this.createExecutionLog(executionId, stage.id, attempt, context, stage.retry_config);
+      const attemptStartedAt = Date.now();
 
       try {
         await this.logEvent(executionId, 'stage_started', stage.id, { attempt });
+        await this.emitAuditEvent(
+          executionId,
+          stage.id,
+          'stage_started',
+          'info',
+          { attempt, retry_policy: retryConfig }
+        );
 
         const startTime = Date.now();
         const result = await this.executeStage(stage, context);
@@ -166,6 +207,13 @@ export class WorkflowOrchestrator {
 
         await this.completeExecutionLog(logId, 'completed', duration, result);
         await this.logEvent(executionId, 'stage_completed', stage.id, { attempt, duration });
+        await this.emitAuditEvent(
+          executionId,
+          stage.id,
+          'stage_completed',
+          'info',
+          { attempt, duration, output: result }
+        );
 
         this.resetCircuitBreaker(circuitBreakerKey);
 
@@ -178,7 +226,7 @@ export class WorkflowOrchestrator {
         return log as WorkflowExecutionLog;
       } catch (error) {
         lastError = error as Error;
-        const duration = Date.now() - Date.now();
+        const duration = Date.now() - attemptStartedAt;
 
         await this.completeExecutionLog(logId, 'failed', duration, null, lastError.message);
         this.recordCircuitBreakerFailure(circuitBreakerKey);
@@ -196,6 +244,13 @@ export class WorkflowOrchestrator {
             retry_policy: retryConfig,
             error: lastError.message
           });
+          await this.emitAuditEvent(
+            executionId,
+            stage.id,
+            'stage_retrying',
+            'warn',
+            { attempt, error: lastError.message, retry_policy: retryConfig }
+          );
 
           const delay = this.calculateRetryDelay(
             attempt,
@@ -217,6 +272,13 @@ export class WorkflowOrchestrator {
             error: lastError.message,
             circuit_breaker: this.circuitBreakers.get(circuitBreakerKey)
           });
+          await this.emitAuditEvent(
+            executionId,
+            stage.id,
+            'stage_failed',
+            'error',
+            { attempt, error: lastError.message, circuit_breaker: this.circuitBreakers.get(circuitBreakerKey) }
+          );
         }
       }
     }
@@ -302,6 +364,13 @@ export class WorkflowOrchestrator {
 
     if (breaker.failure_count >= breaker.threshold) {
       breaker.state = 'open';
+      void this.emitAuditEvent(
+        key.split('-')[0],
+        key.split('-')[1] || null,
+        'circuit_opened',
+        'error',
+        { key, failure_count: breaker.failure_count, threshold: breaker.threshold }
+      );
     }
   }
 
@@ -395,14 +464,29 @@ export class WorkflowOrchestrator {
 
     await this.logEvent(executionId, 'workflow_failed', null, { error: errorMessage });
     await this.logAudit(executionId, 'workflow_failed', { error: errorMessage });
+    await this.emitAuditEvent(executionId, null, 'workflow_failed', 'error', { error: errorMessage });
 
     if (await workflowCompensation.canRollback(executionId)) {
       try {
         await workflowCompensation.rollbackExecution(executionId);
         await this.logEvent(executionId, 'workflow_rolled_back', null, { reason: 'automatic_compensation' });
         await this.logAudit(executionId, 'workflow_rolled_back', { reason: 'automatic_compensation' });
+        await this.emitAuditEvent(
+          executionId,
+          null,
+          'workflow_rolled_back',
+          'warn',
+          { reason: 'automatic_compensation' }
+        );
       } catch (rollbackError) {
         await this.logAudit(executionId, 'workflow_rollback_failed', { error: (rollbackError as Error).message });
+        await this.emitAuditEvent(
+          executionId,
+          null,
+          'workflow_rollback_failed',
+          'error',
+          { error: (rollbackError as Error).message }
+        );
       }
     }
   }
@@ -435,6 +519,19 @@ export class WorkflowOrchestrator {
         action,
         metadata
       });
+  }
+
+  private async emitAuditEvent(
+    executionId: string,
+    stageId: string | null,
+    eventType: string,
+    severity: 'info' | 'warn' | 'error',
+    payload: Record<string, any>,
+    attempt?: number
+  ): Promise<void> {
+    await auditEventWriter.record(
+      buildAuditEvent(eventType, severity, 'workflow', payload, executionId, stageId, attempt)
+    );
   }
 
   private delay(ms: number): Promise<void> {

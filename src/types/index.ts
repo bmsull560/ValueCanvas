@@ -271,6 +271,8 @@ export interface AuditLogEntry {
   status: 'success' | 'failed';
 }
 
+export * from './audit';
+
 export interface BillingPlan {
   id: string;
   name: string;

@@ -13,6 +13,7 @@ export * from './UserSettingsService';
 export * from './AuthService';
 export * from './PermissionService';
 export * from './AuditLogService';
+export * from './AuditEventWriter';
 
 // Service instances (singletons)
 export { settingsService } from './SettingsService';
@@ -20,6 +21,7 @@ export { userSettingsService } from './UserSettingsService';
 export { authService } from './AuthService';
 export { permissionService } from './PermissionService';
 export { auditLogService } from './AuditLogService';
+export { auditEventWriter, auditEventQueryService } from './AuditEventWriter';
 
 export { ROIFormulaInterpreter } from './ROIFormulaInterpreter';
 export { ValueFabricService } from './ValueFabricService';

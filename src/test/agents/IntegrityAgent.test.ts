@@ -1,8 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi, afterEach } from 'vitest';
 import { IntegrityAgent } from '../../lib/agent-fabric/agents/IntegrityAgent';
 import { ROIFormulaInterpreter } from '../../services/ROIFormulaInterpreter';
 import { createAgentInfrastructureMocks, createBoltClientMock } from '../utils/mockSupabaseClient';
 import type { IntegrityCheckInput } from '../../lib/agent-fabric/agents/IntegrityAgent';
+import { manifestoValidator } from '../../lib/manifesto/ManifestoRules';
 
 function buildAgent(supabase: any) {
   const { llmGateway, memorySystem, auditLogger } = createAgentInfrastructureMocks();
@@ -19,6 +20,10 @@ function buildAgent(supabase: any) {
 }
 
 describe('IntegrityAgent manifesto validation', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('validates value tree compliance across manifesto rules', async () => {
     const supabase = createBoltClientMock({
       value_tree_nodes: [
@@ -29,6 +34,12 @@ describe('IntegrityAgent manifesto validation', () => {
     });
 
     const { agent } = buildAgent(supabase);
+
+    vi.spyOn(manifestoValidator, 'validateArtifact').mockReturnValue({
+      isValid: true,
+      violations: [],
+      warnings: []
+    });
 
     const input: IntegrityCheckInput = {
       artifact_type: 'value_tree',
