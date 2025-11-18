@@ -167,6 +167,9 @@ export class CircuitBreakerManager {
       breaker.failure_count = 0;
       breaker.opened_at = null;
       breaker.last_failure_time = null;
+      // Trim metrics to minimum_samples on successful recovery to provide a clean slate
+      // while retaining recent history. During normal operation, metrics are only pruned
+      // by time window to capture all activity within the window period.
       breaker.metrics = breaker.metrics.slice(-breaker.minimum_samples);
     }
   }
