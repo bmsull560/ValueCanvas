@@ -5,7 +5,7 @@ function maskValue(value: unknown): unknown {
     if (value.includes('@')) {
       const [user, domain] = value.split('@');
       if (domain) {
-        return `${user[0] || ''}***@${domain}`;
+        return `${user[0] || ''}***@***`;
       }
     }
     if (value.length > 12) {
