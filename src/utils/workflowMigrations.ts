@@ -1,4 +1,4 @@
-import { WorkflowDefinitionRegistry, WorkflowDefinitionResolution } from '../services/WorkflowDefinitionRegistry';
+import { WorkflowDefinitionRegistry } from '../services/WorkflowDefinitionRegistry';
 import { WorkflowDAG } from '../types/workflow';
 
 export interface MigrationResult {
@@ -29,12 +29,4 @@ export async function migrateWorkflowDefinitions(
   }
 
   return results;
-}
-
-export async function resolveForExecution(
-  registry: WorkflowDefinitionRegistry,
-  name: string,
-  requestedVersion?: number
-): Promise<WorkflowDefinitionResolution> {
-  return registry.resolve(name, requestedVersion);
 }

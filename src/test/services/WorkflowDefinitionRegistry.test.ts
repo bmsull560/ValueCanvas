@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { WorkflowDefinitionRegistry } from '../../services/WorkflowDefinitionRegistry';
-import { migrateWorkflowDefinitions, resolveForExecution } from '../../utils/workflowMigrations';
+import { migrateWorkflowDefinitions } from '../../utils/workflowMigrations';
 import { createBoltClientMock } from '../utils/mockSupabaseClient';
 import { WorkflowDAG } from '../../types/workflow';
 
@@ -101,7 +101,7 @@ describe('Workflow migration utilities', () => {
       migrationResults[2].issues.some(issue => issue.includes('Transition from start to missing'))
     ).toBe(true);
 
-    const resolution = await resolveForExecution(registry, 'Test Workflow', 3);
+    const resolution = await registry.resolve('Test Workflow', 3);
     expect(resolution.version).toBe(2);
     expect(resolution.resolved_from_fallback).toBe(true);
   });
