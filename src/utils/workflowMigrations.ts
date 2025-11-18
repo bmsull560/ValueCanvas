@@ -31,10 +31,3 @@ export async function migrateWorkflowDefinitions(
   return results;
 }
 
-export async function resolveForExecution(
-  registry: WorkflowDefinitionRegistry,
-  name: string,
-  requestedVersion?: number
-): Promise<WorkflowDefinitionResolution> {
-  return registry.resolve(name, requestedVersion);
-}
