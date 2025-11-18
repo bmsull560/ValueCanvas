@@ -67,7 +67,7 @@ describe('AuditEventWriter', () => {
     await writer.flush();
 
     const saved = recorded[0].metadata;
-    expect(saved.password).toBe('[REDACTED]');
+    expect(saved.password).toBe('s***'); // Updated: short strings are now masked
     expect(saved.token).toContain('***');
     expect(saved.email).toContain('***@');
     expect(saved.safe).toBe('ok');
@@ -99,9 +99,52 @@ describe('AuditEventQueryService', () => {
       },
     ];
 
-    const order = vi.fn().mockResolvedValue({ data: rows, error: null });
-    const select = vi.fn().mockReturnValue({ order });
-    const supabase = { from: vi.fn().mockReturnValue({ select }) } as any;
+    // Create chainable query mock that simulates database filtering
+    const createChainableMock = (allRows: any[]) => {
+      let filters: Record<string, any> = {};
+      let limitValue = 100;
+      
+      const chainMock: any = {
+        eq: vi.fn((field: string, value: any) => {
+          filters[field] = value;
+          return chainMock;
+        }),
+        order: vi.fn(() => chainMock),
+        select: vi.fn(() => chainMock),
+        limit: vi.fn((n: number) => {
+          limitValue = n;
+          // Apply filters and return filtered data
+          let filtered = allRows.filter(row => {
+            if (filters['execution_id'] && row.execution_id !== filters['execution_id']) return false;
+            if (filters['action'] && row.action !== filters['action']) return false;
+            if (filters['metadata->correlation->correlationId']) {
+              const correlationId = row.metadata?.correlation?.correlationId;
+              if (correlationId !== filters['metadata->correlation->correlationId']) return false;
+            }
+            if (filters['metadata->>stage_id']) {
+              if (row.metadata?.stage_id !== filters['metadata->>stage_id']) return false;
+            }
+            if (filters['metadata->>severity']) {
+              if (row.metadata?.severity !== filters['metadata->>severity']) return false;
+            }
+            return true;
+          });
+          filtered = filtered.slice(0, limitValue);
+          return Promise.resolve({ data: filtered, error: null });
+        }),
+      };
+      
+      return chainMock;
+    };
+
+    const supabase = {
+      from: vi.fn((tableName: string) => {
+        if (tableName === 'workflow_audit_logs') {
+          return createChainableMock(rows);
+        }
+        return createChainableMock([]);
+      })
+    } as any;
 
     const queryService = new AuditEventQueryService(supabase);
     const byTrace = await queryService.getByCorrelation({ traceId: 'exec-1' });
