@@ -178,8 +178,9 @@ export class WorkflowOrchestrator {
         await this.logEvent(executionId, 'stage_completed', stage.id, { attempt, duration });
 
         if (route?.selected_agent) {
-          agentRoutingLayer.getRegistry().recordRelease(route.selected_agent.id);
-          agentRoutingLayer.getRegistry().markHealthy(route.selected_agent.id);
+          const registry = agentRoutingLayer.getRegistry();
+          registry.recordRelease(route.selected_agent.id);
+          registry.markHealthy(route.selected_agent.id);
         }
 
         this.resetCircuitBreaker(circuitBreakerKey);
@@ -276,12 +277,12 @@ export class WorkflowOrchestrator {
     return {
       stage_id: stage.id,
       agent_type: stage.agent_type,
-      agent_id: route?.selected_agent.id,
+      agent_id: route?.selected_agent?.id,
       artifacts_created: [],
       next_context: {
         ...context,
         lifecycle_stage: stage.agent_type,
-        previous_agent_id: route?.selected_agent.id,
+        previous_agent_id: route?.selected_agent?.id,
         fallback_agents: route?.fallback_agents.map(agent => agent.id)
       }
     };
