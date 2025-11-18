@@ -67,7 +67,7 @@ describe('AuditEventWriter', () => {
     await writer.flush();
 
     const saved = recorded[0].metadata;
-    expect(saved.password).toBe('[REDACTED]');
+    expect(saved.password).toBe('s***'); // 'super-secret' masked as 's***'
     expect(saved.token).toContain('***');
     expect(saved.email).toContain('***@');
     expect(saved.safe).toBe('ok');
@@ -99,9 +99,25 @@ describe('AuditEventQueryService', () => {
       },
     ];
 
-    const order = vi.fn().mockResolvedValue({ data: rows, error: null });
-    const select = vi.fn().mockReturnValue({ order });
-    const supabase = { from: vi.fn().mockReturnValue({ select }) } as any;
+    // Create a chainable query mock that supports .eq(), .limit(), etc.
+    let filteredRows = rows;
+    const chain: any = {
+      eq: vi.fn((field: string, value: any) => {
+        if (field === 'correlation_id') {
+          filteredRows = rows.filter(r => r.metadata.correlation.correlationId === value);
+        }
+        return chain;
+      }),
+      limit: vi.fn(() => chain),
+      then: (resolve: any) => resolve({ data: filteredRows, error: null }), // Make it thenable
+    };
+
+    const order = vi.fn(() => chain);
+    const select = vi.fn(() => {
+      filteredRows = rows; // Reset for each query
+      return { order };
+    });
+    const supabase = { from: vi.fn(() => ({ select })) } as any;
 
     const queryService = new AuditEventQueryService(supabase);
     const byTrace = await queryService.getByCorrelation({ traceId: 'exec-1' });

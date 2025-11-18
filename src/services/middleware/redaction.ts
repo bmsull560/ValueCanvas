@@ -8,9 +8,8 @@ function maskValue(value: unknown): unknown {
         return `${user[0] || ''}***@***`;
       }
     }
-    if (value.length > 12) {
-      return `${value.slice(0, 3)}***${value.slice(-3)}`;
-    }
+    // Mask all strings except emails, regardless of length
+    return value.length > 6 ? `${value.slice(0, 1)}***` : '***';
   }
   if (typeof value === 'number') {
     return '***';
