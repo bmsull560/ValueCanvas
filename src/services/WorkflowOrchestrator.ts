@@ -283,7 +283,7 @@ export class WorkflowOrchestrator {
         ...context,
         lifecycle_stage: stage.agent_type,
         previous_agent_id: route?.selected_agent?.id,
-        fallback_agents: route?.fallback_agents.map(agent => agent.id)
+        fallback_agents: route?.fallback_agents?.map(agent => agent.id) || []
       }
     };
   }
