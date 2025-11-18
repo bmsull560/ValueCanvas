@@ -59,7 +59,6 @@ export interface CircuitBreakerState {
   failure_count: number;
   last_failure_time: string | null;
   state: 'closed' | 'open' | 'half_open';
-  threshold: number;
   timeout_seconds: number;
   metrics: Array<{ timestamp: number; success: boolean; durationMs: number }>;
   opened_at: string | null;

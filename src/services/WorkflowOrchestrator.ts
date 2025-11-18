@@ -150,16 +150,15 @@ export class WorkflowOrchestrator {
 
     for (let attempt = 1; attempt <= retryConfig.max_attempts; attempt++) {
       const logId = await this.createExecutionLog(executionId, stage.id, attempt, context, stage.retry_config);
+      const startTime = Date.now();
 
       try {
         await this.logEvent(executionId, 'stage_started', stage.id, { attempt });
-
-        const startTime = Date.now();
         const result = await this.circuitBreakers.execute(
           circuitBreakerKey,
           () => this.executeStage(stage, context),
           {
-            latencyThresholdMs: stage.timeout_seconds * 1000,
+            latencyThresholdMs: Math.floor(stage.timeout_seconds * 1000 * 0.8),
             timeoutMs: stage.timeout_seconds * 1000
           }
         );

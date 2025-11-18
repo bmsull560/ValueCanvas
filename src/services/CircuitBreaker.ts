@@ -80,7 +80,6 @@ export class CircuitBreakerManager {
         failure_count: 0,
         last_failure_time: null,
         state: 'closed',
-        threshold: Math.round(config.minimumSamples * config.failureRateThreshold),
         timeout_seconds: Math.ceil(config.timeoutMs / 1000),
         metrics: [],
         opened_at: null,
@@ -129,6 +128,10 @@ export class CircuitBreakerManager {
   private pruneMetrics(breaker: CircuitBreakerState): void {
     const cutoff = Date.now() - breaker.window_ms;
     breaker.metrics = breaker.metrics.filter(metric => metric.timestamp >= cutoff);
+    // Limit metrics array size to prevent unbounded growth within the window
+    if (breaker.metrics.length > breaker.minimum_samples * 10) {
+      breaker.metrics = breaker.metrics.slice(-breaker.minimum_samples * 10);
+    }
   }
 
   private recordMetric(breaker: CircuitBreakerState, metric: CircuitBreakerMetric): void {
@@ -154,7 +157,9 @@ export class CircuitBreakerManager {
       return;
     }
 
-    if (total >= breaker.minimum_samples && (failureRate >= breaker.failure_rate_threshold || avgLatency >= breaker.latency_threshold_ms)) {
+    const isFailureRateExceeded = failureRate >= breaker.failure_rate_threshold;
+    const isLatencyExceeded = avgLatency >= breaker.latency_threshold_ms;
+    if (total >= breaker.minimum_samples && (isFailureRateExceeded || isLatencyExceeded)) {
       breaker.state = 'open';
       breaker.opened_at = new Date().toISOString();
       breaker.half_open_probes = 0;
