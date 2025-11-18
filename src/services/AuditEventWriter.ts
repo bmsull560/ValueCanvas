@@ -72,8 +72,8 @@ export class AuditEventWriter {
 
 export function createCorrelation(executionId: string, stageId?: string | null, attempt?: number) {
   const traceId = executionId;
-  const correlationId = [executionId, stageId, attempt ?? 0].filter(Boolean).join(':');
-  const parentCorrelationId = stageId ? [executionId, stageId].filter(Boolean).join(':') : undefined;
+  const correlationId = [executionId, stageId, attempt ?? 0].filter(v => v !== null && v !== undefined).join(':');
+  const parentCorrelationId = stageId ? [executionId, stageId].filter(v => v !== null && v !== undefined).join(':') : undefined;
   return { traceId, correlationId, parentCorrelationId };
 }
 
