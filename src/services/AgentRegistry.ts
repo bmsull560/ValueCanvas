@@ -134,11 +134,9 @@ export class AgentRegistry {
 
   getAgentsByLifecycle(lifecycle_stage: LifecycleStage, includeDegraded = false): AgentRecord[] {
     return Array.from(this.agents.values())
+      .filter(agent => agent.lifecycle_stage === lifecycle_stage)
       .filter(agent => {
         this.updateAgentHealthStatus(agent);
-        return agent.lifecycle_stage === lifecycle_stage;
-      })
-      .filter(agent => {
         if (agent.status === 'offline') return false;
         if (!includeDegraded && agent.status !== 'healthy') return false;
         return true;
