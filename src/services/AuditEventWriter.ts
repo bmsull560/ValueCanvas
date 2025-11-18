@@ -101,22 +101,37 @@ export class AuditEventQueryService {
   constructor(private client: SupabaseClient) {}
 
   async getByCorrelation(options: AuditQueryOptions): Promise<AuditEvent[]> {
-    const { data, error } = await this.client
+    let query = this.client
       .from('workflow_audit_logs')
       .select('*')
       .order('created_at', { ascending: false });
 
+    // Apply filters at the database level
+    if (options.traceId) {
+      query = query.eq('execution_id', options.traceId);
+    }
+    if (options.correlationId) {
+      query = query.eq('correlation_id', options.correlationId);
+    }
+    if (options.stageId !== undefined) {
+      query = query.eq('stage_id', options.stageId);
+    }
+    if (options.eventType) {
+      query = query.eq('action', options.eventType);
+    }
+    if (options.severity) {
+      query = query.eq('severity', options.severity);
+    }
+    if (options.limit) {
+      query = query.limit(options.limit);
+    } else {
+      query = query.limit(100);
+    }
+
+    const { data, error } = await query;
     if (error) throw error;
     const events = (data || []).map((row: any) => this.fromRow(row));
-
-    return events.filter((event) => {
-      if (options.traceId && event.correlation.traceId !== options.traceId) return false;
-      if (options.correlationId && event.correlation.correlationId !== options.correlationId) return false;
-      if (options.stageId !== undefined && event.stageId !== options.stageId) return false;
-      if (options.eventType && event.eventType !== options.eventType) return false;
-      if (options.severity && event.severity !== options.severity) return false;
-      return true;
-    }).slice(0, options.limit || 100);
+    return events;
   }
 
   private fromRow(row: any): AuditEvent {
