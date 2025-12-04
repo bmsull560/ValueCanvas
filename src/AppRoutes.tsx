@@ -12,6 +12,7 @@ import LoginPage from './views/Auth/LoginPage';
 import SignupPage from './views/Auth/SignupPage';
 import ResetPasswordPage from './views/Auth/ResetPasswordPage';
 import App from './App';
+import ApiDocsPage from './views/ApiDocsPage';
 
 export function AppRoutes() {
   return (
@@ -20,6 +21,7 @@ export function AppRoutes() {
         <ToastProvider>
           <Routes>
           {/* Public Auth Routes */}
+          <Route path="/docs/api" element={<ApiDocsPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />

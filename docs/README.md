@@ -1,6 +1,6 @@
 # ValueCanvas Documentation
 
-**Last Updated:** 2024-11-29
+**Last Updated:** 2024-12-02
 
 Complete documentation for the ValueCanvas AI-Powered Value Realization Platform.
 
@@ -45,6 +45,8 @@ Complete documentation for the ValueCanvas AI-Powered Value Realization Platform
 
 ### 🔌 API Documentation
 **Location:** `api/`
+- **[Interactive OpenAPI Portal](/docs/api)** - Live Swagger UI served from `openapi.yaml`
+- **[Deprecation Policy](./DEPRECATION_POLICY.md)** - Versioning, deprecation windows, and sunset expectations
 - **[API Examples](./api/API_EXAMPLES.md)** - Code examples and usage patterns
 - **[Services API](./api/SERVICES_API.md)** - Internal services API reference
 - **[External API Documentation](./api/EXTERNAL_API_DOCUMENTATION.md)** - External integrations

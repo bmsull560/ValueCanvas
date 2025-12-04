@@ -8,6 +8,7 @@ import cors from 'cors';
 import billingRouter from '../api/billing';
 import { createLogger } from '../lib/logger';
 import { requestAuditMiddleware } from '../middleware/requestAuditMiddleware';
+import docsRouter from '../api/docs';
 
 import { settings } from '../config/settings';
 
@@ -35,6 +36,8 @@ app.get(
 
 // Mount billing routes
 app.use('/api/billing', billingRouter);
+app.use('/api', docsRouter);
+app.get('/docs/api', (_req, res) => res.redirect('/api/docs'));
 
 // Error handler
 app.use(

@@ -1,20 +1,27 @@
 openapi: 3.1.0
 info:
   title: ValueCanvas API
-  version: 1.0.0
+  version: 1.2.0
   description: |
     ValueCanvas API provides AI-powered business model canvas generation and refinement.
-    
+
     ## Features
     - Business model canvas generation
     - Canvas section refinement
     - LLM-powered suggestions
     - Cost tracking and analytics
     - Prompt version control
-    
-    ## Authentication
-    All endpoints require Bearer token authentication.
-    
+
+    ## Authentication & Tenant Context
+    - Send `Authorization: Bearer <token>` on every request.
+    - Include `X-Tenant-ID` to ensure the request is routed within the correct tenant boundary.
+    - Supply `X-API-Version` to pin to a supported version. The default version is `2024-12-01` and deprecation windows are published in the Deprecation Policy.
+
+    ## Error Codes
+    - **401 Unauthorized**: Missing or invalid bearer token or service identity headers.
+    - **403 Forbidden**: Authenticated, but the token is not allowed to act on the specified tenant or resource.
+    - **429 Too Many Requests**: Rate limit exceeded; retry after the window resets.
+
     ## Rate Limits
     - Free: 10 requests/day
     - Basic: 50 requests/day
@@ -34,7 +41,7 @@ servers:
     description: Production server
   - url: https://staging.valuecanvas.com
     description: Staging server
-  - url: http://localhost:3000
+  - url: http://localhost:3001
     description: Local development
 
 tags:
@@ -57,8 +64,13 @@ paths:
     get:
       tags: [Health]
       summary: Liveness probe
-      description: Kubernetes liveness probe endpoint
+      description: Kubernetes liveness probe endpoint. Returns 503 when dependencies are unhealthy and may return 429 if upstream probes are throttled.
       security: []
+      x-codeSamples:
+        - lang: cURL
+          label: Check liveness
+          source: |
+            curl -s https://api.valuecanvas.com/health/live
       responses:
         '200':
           description: Service is alive
@@ -73,13 +85,20 @@ paths:
                   timestamp:
                     type: string
                     format: date-time
+        '429':
+          $ref: '#/components/responses/RateLimitError'
 
   /health/ready:
     get:
       tags: [Health]
       summary: Readiness probe
-      description: Kubernetes readiness probe endpoint
+      description: Kubernetes readiness probe endpoint. Returns 429 if readiness checks are being throttled and 503 when dependencies are not ready.
       security: []
+      x-codeSamples:
+        - lang: cURL
+          label: Check readiness
+          source: |
+            curl -s https://api.valuecanvas.com/health/ready
       responses:
         '200':
           description: Service is ready
@@ -103,6 +122,8 @@ paths:
                           enum: [healthy, unhealthy]
                         latency:
                           type: number
+        '429':
+          $ref: '#/components/responses/RateLimitError'
         '503':
           description: Service is not ready
           content:
@@ -114,8 +135,11 @@ paths:
     post:
       tags: [Canvas]
       summary: Generate business model canvas
-      description: Generate a complete business model canvas using AI
+      description: Generate a complete business model canvas using AI. Returns 401 for missing or invalid bearer tokens, 403 when the token cannot access the requested tenant, and 429 when rate limits are exceeded.
       operationId: generateCanvas
+      parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+        - $ref: '#/components/parameters/ApiVersionHeader'
       requestBody:
         required: true
         content:
@@ -145,6 +169,20 @@ paths:
                     - meta-llama/Llama-3-70b-chat-hf
                     - meta-llama/Llama-3-8b-chat-hf
                     - mistralai/Mixtral-8x7B-Instruct-v0.1
+      x-codeSamples:
+        - lang: cURL
+          label: Generate a tenant-scoped canvas
+          source: |
+            curl -X POST https://api.valuecanvas.com/api/canvas/generate \
+              -H "Authorization: Bearer $API_TOKEN" \
+              -H "X-Tenant-ID: tenant_12345" \
+              -H "X-API-Version: 2024-12-01" \
+              -H "Content-Type: application/json" \
+              -d '{
+                "businessDescription": "A SaaS platform for project management",
+                "industry": "Technology",
+                "targetMarket": "SMBs"
+              }'
       responses:
         '200':
           description: Canvas generated successfully
@@ -176,6 +214,10 @@ paths:
                         example: 1500
                       cached:
                         type: boolean
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
         '400':
           description: Invalid request
           content:
@@ -183,11 +225,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '429':
-          description: Rate limit exceeded
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RateLimitError'
+          $ref: '#/components/responses/RateLimitError'
         '503':
           description: LLM service unavailable
           content:
@@ -199,14 +237,25 @@ paths:
     get:
       tags: [Canvas]
       summary: Get canvas by ID
+      description: Retrieve a canvas scoped to the requesting tenant. Returns 401 for missing credentials, 403 when the canvas belongs to another tenant, 404 when not found, and 429 when rate limits apply.
       operationId: getCanvas
       parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+        - $ref: '#/components/parameters/ApiVersionHeader'
         - name: canvasId
           in: path
           required: true
           schema:
             type: string
             format: uuid
+      x-codeSamples:
+        - lang: cURL
+          label: Fetch a canvas
+          source: |
+            curl -X GET https://api.valuecanvas.com/api/canvas/123e4567-e89b-12d3-a456-426614174000 \
+              -H "Authorization: Bearer $API_TOKEN" \
+              -H "X-Tenant-ID: tenant_12345" \
+              -H "X-API-Version: 2024-12-01"
       responses:
         '200':
           description: Canvas retrieved successfully
@@ -219,18 +268,27 @@ paths:
                     type: boolean
                   data:
                     $ref: '#/components/schemas/Canvas'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
         '404':
           description: Canvas not found
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
 
     put:
       tags: [Canvas]
       summary: Update canvas
+      description: Update an existing canvas for the provided tenant. Returns 401/403 on authentication or tenant violations and 429 when request volume is throttled.
       operationId: updateCanvas
       parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+        - $ref: '#/components/parameters/ApiVersionHeader'
         - name: canvasId
           in: path
           required: true
@@ -243,6 +301,16 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/Canvas'
+      x-codeSamples:
+        - lang: cURL
+          label: Update a canvas
+          source: |
+            curl -X PUT https://api.valuecanvas.com/api/canvas/123e4567-e89b-12d3-a456-426614174000 \
+              -H "Authorization: Bearer $API_TOKEN" \
+              -H "X-Tenant-ID: tenant_12345" \
+              -H "X-API-Version: 2024-12-01" \
+              -H "Content-Type: application/json" \
+              -d '{"valuePropositions": ["Automated insights"], "customerSegments": ["Enterprise"]}'
       responses:
         '200':
           description: Canvas updated successfully
@@ -255,18 +323,35 @@ paths:
                     type: boolean
                   data:
                     $ref: '#/components/schemas/Canvas'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
 
     delete:
       tags: [Canvas]
       summary: Delete canvas
+      description: Delete a canvas within the tenant boundary. Returns 401/403 when authorization fails and 429 when delete operations are throttled.
       operationId: deleteCanvas
       parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+        - $ref: '#/components/parameters/ApiVersionHeader'
         - name: canvasId
           in: path
           required: true
           schema:
             type: string
             format: uuid
+      x-codeSamples:
+        - lang: cURL
+          label: Delete a canvas
+          source: |
+            curl -X DELETE https://api.valuecanvas.com/api/canvas/123e4567-e89b-12d3-a456-426614174000 \
+              -H "Authorization: Bearer $API_TOKEN" \
+              -H "X-Tenant-ID: tenant_12345" \
+              -H "X-API-Version: 2024-12-01"
       responses:
         '200':
           description: Canvas deleted successfully
@@ -277,14 +362,22 @@ paths:
                 properties:
                   success:
                     type: boolean
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
 
   /api/canvas/{canvasId}/refine:
     post:
       tags: [Canvas]
       summary: Refine canvas section
-      description: Get AI-powered suggestions to improve a canvas section
+      description: Get AI-powered suggestions to improve a canvas section for a given tenant. Returns 401/403 for authentication or tenant violations and 429 when rate limits are hit.
       operationId: refineCanvas
       parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+        - $ref: '#/components/parameters/ApiVersionHeader'
         - name: canvasId
           in: path
           required: true
@@ -316,6 +409,16 @@ paths:
                   type: string
                   description: Additional context for refinement
                   example: We want to expand into enterprise market
+      x-codeSamples:
+        - lang: cURL
+          label: Refine a canvas section
+          source: |
+            curl -X POST https://api.valuecanvas.com/api/canvas/123e4567-e89b-12d3-a456-426614174000/refine \
+              -H "Authorization: Bearer $API_TOKEN" \
+              -H "X-Tenant-ID: tenant_12345" \
+              -H "X-API-Version: 2024-12-01" \
+              -H "Content-Type: application/json" \
+              -d '{"section": "valuePropositions", "context": "Enterprise expansion"}'
       responses:
         '200':
           description: Suggestions generated successfully
@@ -339,13 +442,22 @@ paths:
                         type: number
                       cached:
                         type: boolean
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
 
   /api/llm/chat:
     post:
       tags: [LLM]
       summary: Send LLM chat request
-      description: Send a chat completion request to LLM with automatic fallback
+      description: Send a chat completion request to LLM with automatic fallback. Returns 401 for missing credentials, 403 when tenant access is blocked, and 429 when usage exceeds rate limits.
       operationId: llmChat
+      parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+        - $ref: '#/components/parameters/ApiVersionHeader'
       requestBody:
         required: true
         content:
@@ -374,6 +486,16 @@ paths:
                   default: 0.7
                   minimum: 0
                   maximum: 2
+      x-codeSamples:
+        - lang: cURL
+          label: Send a chat request
+          source: |
+            curl -X POST https://api.valuecanvas.com/api/llm/chat \
+              -H "Authorization: Bearer $API_TOKEN" \
+              -H "X-Tenant-ID: tenant_12345" \
+              -H "X-API-Version: 2024-12-01" \
+              -H "Content-Type: application/json" \
+              -d '{"prompt": "Summarize our enterprise GTM plan", "model": "meta-llama/Llama-3-70b-chat-hf"}'
       responses:
         '200':
           description: LLM response generated successfully
@@ -410,13 +532,30 @@ paths:
                         type: number
                       cached:
                         type: boolean
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
 
   /api/llm/stats:
     get:
       tags: [LLM]
       summary: Get LLM statistics
-      description: Get statistics about LLM usage and circuit breaker status
+      description: Get statistics about LLM usage and circuit breaker status. Returns 401/403 when credentials are invalid and 429 when diagnostics are rate limited.
       operationId: getLLMStats
+      parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+        - $ref: '#/components/parameters/ApiVersionHeader'
+      x-codeSamples:
+        - lang: cURL
+          label: Inspect LLM stats
+          source: |
+            curl -X GET https://api.valuecanvas.com/api/llm/stats \
+              -H "Authorization: Bearer $API_TOKEN" \
+              -H "X-Tenant-ID: tenant_12345" \
+              -H "X-API-Version: 2024-12-01"
       responses:
         '200':
           description: Statistics retrieved successfully
@@ -441,13 +580,30 @@ paths:
                             type: integer
                           misses:
                             type: integer
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
 
   /api/llm/health:
     get:
       tags: [LLM]
       summary: Check LLM service health
-      description: Check health of LLM providers and circuit breakers
+      description: Check health of LLM providers and circuit breakers. Returns 401/403 when credentials are invalid and 429 if health checks are throttled.
       operationId: getLLMHealth
+      parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+        - $ref: '#/components/parameters/ApiVersionHeader'
+      x-codeSamples:
+        - lang: cURL
+          label: Check LLM provider health
+          source: |
+            curl -X GET https://api.valuecanvas.com/api/llm/health \
+              -H "Authorization: Bearer $API_TOKEN" \
+              -H "X-Tenant-ID: tenant_12345" \
+              -H "X-API-Version: 2024-12-01"
       responses:
         '200':
           description: All providers healthy
@@ -465,6 +621,12 @@ paths:
                         $ref: '#/components/schemas/ProviderHealth'
                       openAI:
                         $ref: '#/components/schemas/ProviderHealth'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
         '503':
           description: One or more providers unhealthy
           content:
@@ -476,9 +638,11 @@ paths:
     get:
       tags: [User]
       summary: Get user LLM usage
-      description: Get LLM usage statistics for the authenticated user
+      description: Get LLM usage statistics for the authenticated user. Returns 401/403 for authentication or tenant violations and 429 when reporting is throttled.
       operationId: getUserLLMUsage
       parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+        - $ref: '#/components/parameters/ApiVersionHeader'
         - name: startDate
           in: query
           schema:
@@ -489,6 +653,14 @@ paths:
           schema:
             type: string
             format: date
+      x-codeSamples:
+        - lang: cURL
+          label: Review usage for a tenant
+          source: |
+            curl -X GET "https://api.valuecanvas.com/api/user/llm-usage?startDate=2024-12-01&endDate=2024-12-31" \
+              -H "Authorization: Bearer $API_TOKEN" \
+              -H "X-Tenant-ID: tenant_12345" \
+              -H "X-API-Version: 2024-12-01"
       responses:
         '200':
           description: Usage statistics retrieved
@@ -527,20 +699,36 @@ paths:
                               type: integer
                             cost:
                               type: number
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
 
   /api/prompts/versions:
     get:
       tags: [Prompts]
       summary: List prompt versions
-      description: List all versions for a prompt key
+      description: List all versions for a prompt key. Returns 401/403 for authentication or tenant violations and 429 when requests are throttled.
       operationId: listPromptVersions
       parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+        - $ref: '#/components/parameters/ApiVersionHeader'
         - name: promptKey
           in: query
           required: true
           schema:
             type: string
             example: canvas.generate
+      x-codeSamples:
+        - lang: cURL
+          label: List prompt versions
+          source: |
+            curl -X GET "https://api.valuecanvas.com/api/prompts/versions?promptKey=canvas.generate" \
+              -H "Authorization: Bearer $API_TOKEN" \
+              -H "X-Tenant-ID: tenant_12345" \
+              -H "X-API-Version: 2024-12-01"
       responses:
         '200':
           description: Versions retrieved successfully
@@ -555,12 +743,21 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/PromptVersion'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
 
     post:
       tags: [Prompts]
       summary: Create prompt version
-      description: Create a new version of a prompt
+      description: Create a new version of a prompt. Returns 401/403 when authentication fails and 429 when creation is throttled.
       operationId: createPromptVersion
+      parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+        - $ref: '#/components/parameters/ApiVersionHeader'
       requestBody:
         required: true
         content:
@@ -597,6 +794,16 @@ paths:
                         type: string
                     model:
                       type: string
+      x-codeSamples:
+        - lang: cURL
+          label: Create a prompt version
+          source: |
+            curl -X POST https://api.valuecanvas.com/api/prompts/versions \
+              -H "Authorization: Bearer $API_TOKEN" \
+              -H "X-Tenant-ID: tenant_12345" \
+              -H "X-API-Version: 2024-12-01" \
+              -H "Content-Type: application/json" \
+              -d '{"promptKey":"canvas.generate","template":"Generate a canvas for {{businessDescription}}","variables":["businessDescription","industry"],"metadata":{"author":"docs-bot","description":"Tenant aware canvas","model":"meta-llama/Llama-3-70b-chat-hf"}}'
       responses:
         '201':
           description: Version created successfully
@@ -609,14 +816,22 @@ paths:
                     type: boolean
                   data:
                     $ref: '#/components/schemas/PromptVersion'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
 
   /api/prompts/versions/{promptKey}/{version}/activate:
     post:
       tags: [Prompts]
       summary: Activate prompt version
-      description: Activate a specific version of a prompt
+      description: Activate a specific version of a prompt. Returns 401/403 for authentication or tenant issues and 429 when activation calls are throttled.
       operationId: activatePromptVersion
       parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+        - $ref: '#/components/parameters/ApiVersionHeader'
         - name: promptKey
           in: path
           required: true
@@ -627,6 +842,14 @@ paths:
           required: true
           schema:
             type: integer
+      x-codeSamples:
+        - lang: cURL
+          label: Activate a prompt version
+          source: |
+            curl -X POST https://api.valuecanvas.com/api/prompts/versions/canvas.generate/2/activate \
+              -H "Authorization: Bearer $API_TOKEN" \
+              -H "X-Tenant-ID: tenant_12345" \
+              -H "X-API-Version: 2024-12-01"
       responses:
         '200':
           description: Version activated successfully
@@ -637,6 +860,12 @@ paths:
                 properties:
                   success:
                     type: boolean
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
 
 components:
   securitySchemes:
@@ -822,6 +1051,24 @@ components:
             $ref: '#/components/schemas/RateLimitError'
 
   parameters:
+    TenantIdHeader:
+      name: X-Tenant-ID
+      in: header
+      required: true
+      description: Tenant identifier used to scope all operations and enforce isolation
+      schema:
+        type: string
+        example: tenant_12345
+
+    ApiVersionHeader:
+      name: X-API-Version
+      in: header
+      required: false
+      description: Requested API version. Defaults to the current stable value published in the Deprecation Policy.
+      schema:
+        type: string
+        example: 2024-12-01
+
     PageParam:
       name: page
       in: query
