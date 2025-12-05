@@ -1,6 +1,6 @@
 # ValueCanvas Documentation
 
-**Last Updated:** 2024-12-02
+**Last Updated:** 2025-12-04
 
 Complete documentation for the ValueCanvas AI-Powered Value Realization Platform.
 
