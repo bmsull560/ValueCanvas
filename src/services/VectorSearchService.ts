@@ -350,8 +350,21 @@ export class VectorSearchService {
   ): string {
     const conditions: string[] = [];
 
-    // Type filter
+    // Type filter - validated against allowed types
     if (type) {
+      const allowedTypes: SemanticMemory['type'][] = [
+        'value_proposition',
+        'target_definition',
+        'opportunity',
+        'integrity_check',
+        'workflow_result'
+      ];
+      
+      if (!allowedTypes.includes(type)) {
+        throw new Error(`Invalid memory type: ${type}`);
+      }
+      
+      // Safe to use since we validated against whitelist
       conditions.push(`type = '${type}'`);
     }
 
@@ -362,19 +375,30 @@ export class VectorSearchService {
       conditions.push("COALESCE(metadata->>'data_sensitivity_level', 'unknown') <> 'unknown'");
     }
 
-    // Metadata filters
+    // Metadata filters - with SQL injection prevention
     Object.entries(filters).forEach(([key, value]) => {
       if (value === null || value === undefined) return;
 
+      // Validate key contains only safe characters (alphanumeric, underscore, dash)
+      if (!/^[a-zA-Z0-9_-]+$/.test(key)) {
+        logger.warn('Invalid filter key rejected', { key });
+        return;
+      }
+
       if (typeof value === 'string') {
-        conditions.push(`metadata->>'${key}' = '${value}'`);
+        // Escape single quotes by doubling them (PostgreSQL standard)
+        const escapedValue = value.replace(/'/g, "''");
+        conditions.push(`metadata->>'${key}' = '${escapedValue}'`);
       } else if (typeof value === 'number') {
+        // Numbers are safe - no escaping needed
         conditions.push(`(metadata->>'${key}')::float = ${value}`);
       } else if (typeof value === 'boolean') {
+        // Booleans are safe
         conditions.push(`(metadata->>'${key}')::boolean = ${value}`);
       } else if (Array.isArray(value)) {
-        // Array contains check
-        conditions.push(`metadata->'${key}' @> '${JSON.stringify(value)}'::jsonb`);
+        // Use JSON.stringify which properly escapes values
+        const escapedJson = JSON.stringify(value).replace(/'/g, "''");
+        conditions.push(`metadata->'${key}' @> '${escapedJson}'::jsonb`);
       }
     });
 
