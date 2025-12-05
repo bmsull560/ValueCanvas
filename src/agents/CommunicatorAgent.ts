@@ -8,14 +8,12 @@
  * - Message compression and optimization
  */
 
-import { logger } from '../lib/logger';
 import { v4 as uuidv4 } from 'uuid';
 import { getMessageBus } from '../services/MessageBus';
 import { createLogger } from '../lib/logger';
 import type {
   CommunicationEvent,
   CreateCommunicationEvent,
-  MessageHandler,
 } from '../types/CommunicationEvent';
 
 export class CommunicatorAgent {

@@ -206,7 +206,10 @@ describeMaybe('Concurrency Safety', () => {
       // Target: < 10s for 100 concurrent users
       expect(duration).toBeLessThan(10000);
 
-      console.log(`Load test: ${userCount} users in ${duration}ms`);
+      // Log test results for debugging
+      if (process.env.NODE_ENV === 'test') {
+        console.warn(`Load test: ${userCount} users in ${duration}ms`);
+      }
     });
 
     it('should handle burst traffic', async () => {
@@ -252,11 +255,14 @@ describeMaybe('Concurrency Safety', () => {
       });
 
       // Verify each user has only 1 session
-      sessionsByUser.forEach((sessions, userId) => {
+      sessionsByUser.forEach((sessions) => {
         expect(sessions.size).toBe(1);
       });
 
-      console.log(`Burst test: ${userCount * queriesPerUser} requests in ${duration}ms`);
+      // Log test results for debugging
+      if (process.env.NODE_ENV === 'test') {
+        console.warn(`Burst test: ${userCount * queriesPerUser} requests in ${duration}ms`);
+      }
     });
   });
 
@@ -272,7 +278,7 @@ describeMaybe('Concurrency Safety', () => {
       // Simulate error in session A (invalid query)
       try {
         await service.handleQuery('', userA, resultA.sessionId);
-      } catch (error) {
+      } catch {
         // Expected to fail
       }
 

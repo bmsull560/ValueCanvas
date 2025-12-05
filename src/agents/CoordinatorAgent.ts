@@ -16,7 +16,6 @@ import type {
   TaskIntent,
   CreateTaskIntent,
   Subgoal,
-  CreateSubgoal,
   SubgoalRouting,
   TaskPlan,
 } from '../types/Subgoal';
