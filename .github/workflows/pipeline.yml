@@ -48,7 +48,7 @@ jobs:
         run: |
           npm install -g snyk
           npm audit --json > npm-audit.json || true
-          snyk test --json > snyk-report.json --severity-threshold=high || true
+          snyk test --severity-threshold=high --json > snyk-report.json || true
         continue-on-error: true
       
       - name: Upload security reports
