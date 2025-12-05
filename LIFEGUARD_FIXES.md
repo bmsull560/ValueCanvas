@@ -80,7 +80,7 @@ volumes:
 
 # After (CORRECT)
 volumes:
-  - ./infrastructure/tls/certs/app-cert.pem:/app/certs/cert.pem:ro
+  - ./tls/certs/app-cert.pem:/app/certs/cert.pem:ro
 ```
 
 **Path Resolution:**
