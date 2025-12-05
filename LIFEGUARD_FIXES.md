@@ -70,17 +70,17 @@ Docker Compose automatically:
 Certificate paths were relative to the wrong directory.
 
 **Root Cause:**
-Used `./infrastructure/tls/certs/` as the certificate path, incorrectly assuming paths are resolved relative to the compose file location (`infrastructure/`). However, Docker Compose resolves paths relative to the current working directory (project root), so the correct path is `./tls/certs/`.
+Used `./tls/certs/` as the certificate path, incorrectly assuming Docker Compose resolves paths relative to the compose file location. However, Docker Compose resolves paths relative to the current working directory (project root), so the correct path is `./infrastructure/tls/certs/`.
 
 **Resolution:**
 ```yaml
-# Before (WRONG - assumes path is relative to compose file location)
-volumes:
-  - ./infrastructure/tls/certs/app-cert.pem:/app/certs/cert.pem:ro
-
-# After (CORRECT - path is relative to project root)
+# Before (WRONG - incorrect path relative to project root)
 volumes:
   - ./tls/certs/app-cert.pem:/app/certs/cert.pem:ro
+
+# After (CORRECT - path is relative to project root where docker-compose is invoked)
+volumes:
+  - ./infrastructure/tls/certs/app-cert.pem:/app/certs/cert.pem:ro
 ```
 
 **Path Resolution:**
@@ -89,7 +89,7 @@ When running from project root:
 docker-compose -f docker-compose.dev.yml -f infrastructure/docker-compose.mtls.yml up
 ```
 
-Paths are resolved from the **current working directory** (project root), not the compose file location.
+Paths are resolved from the **current working directory** (project root), not the compose file location. Since the TLS directory is at `./infrastructure/tls/`, the correct path is `./infrastructure/tls/certs/`.
 
 ---
 
