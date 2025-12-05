@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Track rollout of `/docs/api` as the canonical interactive reference.
 - Expand tenant-aware examples across the OpenAPI specification.
 
-## [1.2.0] - 2024-12-02
+## [1.2.0] - 2025-12-04
 ### Added
 - Interactive API reference at `/docs/api` backed by the maintained `openapi.yaml`.
 - Tenant-aware cURL snippets, authentication guidance, and 401/403/429 coverage for every endpoint in the OpenAPI document.
