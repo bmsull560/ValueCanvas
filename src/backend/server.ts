@@ -6,6 +6,7 @@
 import express from 'express';
 import cors from 'cors';
 import billingRouter from '../api/billing';
+import documentRouter from '../api/documents';
 import agentsRouter from '../api/agents';
 import workflowRouter from '../api/workflow';
 import { createLogger } from '../lib/logger';
@@ -40,6 +41,9 @@ app.get(
 // Mount billing routes with versioning support
 apiRouter.use('/billing', billingRouter);
 app.use('/api', apiRouter);
+
+// Document upload with lineage enforcement
+app.use('/api/documents', documentRouter);
 
 // Agent transparency and workflow explainability
 app.use('/api/agents', agentsRouter);
