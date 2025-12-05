@@ -54,6 +54,7 @@ export function ApiDocsPage() {
             src={swaggerUrl}
             className="w-full"
             style={{ minHeight: '75vh', border: 'none' }}
+            sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
           />
         </div>
       </div>
