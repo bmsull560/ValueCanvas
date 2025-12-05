@@ -1,5 +1,5 @@
 #!/usr/bin/env ts-node
-import { runBiasProbes } from '../src/security/bias-probes/BiasProbeRunner.js';
+import { runBiasProbes } from '../src/security/bias-probes/BiasProbeRunner';
 
 async function main() {
   const controller = new AbortController();

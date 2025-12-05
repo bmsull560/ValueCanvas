@@ -201,9 +201,28 @@ import { z } from 'zod';
     // Implementation would delete the persisted results
   }
 
+  /**
+   * Ensures that the workflow is in an active (RUNNING) state before proceeding.
+   * 
+   * Determines workflow ID from the context by trying sessionId, organizationId, 
+   * or userId in that order. If a workflow ID is found and the workflow is PAUSED 
+   * or HALTED, throws an error to prevent execution.
+   * 
+   * If no workflow ID can be determined, logs a warning and returns without 
+   * enforcement - this allows ad-hoc operations that aren't part of a tracked workflow.
+   * 
+   * @param context - Lifecycle context containing workflow identification
+   * @throws Error if workflow is PAUSED or HALTED
+   * @private
+   */
   private ensureWorkflowActive(context: LifecycleContext): void {
     const workflowId = context.sessionId || context.organizationId || context.userId;
     if (!workflowId) {
+      // If no workflow ID can be determined, we cannot enforce workflow status
+      // This is acceptable for ad-hoc operations that aren't part of a tracked workflow
+      logger.warn('Cannot determine workflow ID from context; workflow status check skipped', {
+        context: { userId: context.userId, hasOrgId: !!context.organizationId, hasSessionId: !!context.sessionId }
+      });
       return;
     }
 

@@ -1,16 +1,33 @@
+/**
+ * Represents a demographic group for bias testing.
+ */
 export type DemographicGroup = {
+  /** Unique identifier for the demographic group */
   id: string;
+  /** Human-readable label describing the group */
   label: string;
+  /** Key-value attributes that define the demographic (e.g., name, citizenship, education) */
   attributes: Record<string, string>;
 };
 
+/**
+ * Represents a fairness test prompt for a specific demographic group and scenario.
+ */
 export type FairnessPrompt = {
+  /** Unique identifier for this prompt */
   id: string;
+  /** Scenario being tested (e.g., 'Small business loan approval') */
   scenario: string;
+  /** Demographic group this prompt is testing */
   demographic: DemographicGroup;
+  /** Template string with ${variable} placeholders for demographic attributes */
   template: string;
 };
 
+/**
+ * Predefined demographic groups for bias testing.
+ * These groups represent different demographic backgrounds to test for fairness.
+ */
 export const demographicGroups: DemographicGroup[] = [
   {
     id: 'applicant_alex',
@@ -34,6 +51,10 @@ export const demographicGroups: DemographicGroup[] = [
   }
 ];
 
+/**
+ * Predefined fairness test prompts covering various scenarios.
+ * Each prompt tests decision-making across different demographic groups.
+ */
 export const fairnessPrompts: FairnessPrompt[] = [
   {
     id: 'loan_small_business',
@@ -65,6 +86,22 @@ export const fairnessPrompts: FairnessPrompt[] = [
   }
 ];
 
+/**
+ * Renders a prompt template by replacing ${variable} placeholders with values from attributes.
+ * 
+ * @param template - Template string with ${key} placeholders
+ * @param attributes - Key-value pairs to substitute into the template
+ * @returns Rendered prompt with all placeholders replaced
+ * 
+ * @example
+ * ```typescript
+ * const rendered = renderPrompt(
+ *   'Hello ${name}, you are ${age} years old',
+ *   { name: 'Alice', age: '25' }
+ * );
+ * // Returns: 'Hello Alice, you are 25 years old'
+ * ```
+ */
 export function renderPrompt(template: string, attributes: Record<string, string>): string {
   return template.replace(/\$\{(.*?)\}/g, (_, key) => attributes[key] || '');
 }
