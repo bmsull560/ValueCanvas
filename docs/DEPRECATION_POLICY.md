@@ -1,6 +1,6 @@
 # Deprecation Policy
 
-**Last Updated:** 2025-12-04
+**Last Updated:** 2025-12-05
 
 This policy documents how ValueCanvas versions and deprecates public APIs so integrators can plan upgrades with confidence.
 

@@ -47,7 +47,8 @@ jobs:
       - name: Dependency Check (Snyk)
         run: |
           npm install -g snyk
-          snyk test --severity-threshold=high
+          npm audit --json > npm-audit.json || true
+          snyk test --json > snyk-report.json --severity-threshold=high || true
         continue-on-error: true
       
       - name: Upload security reports
@@ -102,16 +103,16 @@ jobs:
         env:
           DATABASE_URL: postgresql://testuser:testpass@localhost:5432/testdb
           REDIS_URL: redis://localhost:6379
-          VITE_SUPABASE_URL: https://bxaiabnqalurloblfwua.supabase.co
-          VITE_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ4YWlhYm5xYWx1cmxvYmxmd3VhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzMwNjI3ODcsImV4cCI6MjA0ODYzODc4N30.gK3zXg3EqoBBRwHqKsEP5hCgxvtMQ-N0v-lCO_kYm88
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
         run: npm run test
       
       - name: Run integration tests
         env:
           DATABASE_URL: postgresql://testuser:testpass@localhost:5432/testdb
           REDIS_URL: redis://localhost:6379
-          VITE_SUPABASE_URL: https://bxaiabnqalurloblfwua.supabase.co
-          VITE_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ4YWlhYm5xYWx1cmxvYmxmd3VhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzMwNjI3ODcsImV4cCI6MjA0ODYzODc4N30.gK3zXg3EqoBBRwHqKsEP5hCgxvtMQ-N0v-lCO_kYm88
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
         run: npm run test
       
       - name: Upload coverage
@@ -324,7 +325,7 @@ jobs:
           echo "Deployment completed for ${{ github.ref }}" >> deployment-report.md
           echo "Commit: ${{ github.sha }}" >> deployment-report.md
           echo "Time: $(date)" >> deployment-report.md
-          echo "Status: ${{ job.status }}" >> deployment-report.md
+          echo "Build Status: ${{ needs.build.result }}" >> deployment-report.md
       
       - name: Upload report
         uses: actions/upload-artifact@v4

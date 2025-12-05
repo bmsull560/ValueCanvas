@@ -8,7 +8,7 @@ const normalizeBaseUrl = (baseUrl: string | undefined) => {
 };
 
 export function ApiDocsPage() {
-  const fallbackBaseUrl = 'http://localhost:3001';
+  const fallbackBaseUrl = 'http://localhost:3000';
   const resolvedBaseUrl =
     normalizeBaseUrl(import.meta.env.VITE_API_BASE_URL as string | undefined) ||
     (typeof window !== 'undefined' ? normalizeBaseUrl(window.location.origin) : '') ||
@@ -54,7 +54,7 @@ export function ApiDocsPage() {
             src={swaggerUrl}
             className="w-full"
             style={{ minHeight: '75vh', border: 'none' }}
-            sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
+            sandbox="allow-same-origin allow-scripts allow-popups-to-escape-sandbox"
           />
         </div>
       </div>
