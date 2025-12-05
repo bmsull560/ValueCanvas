@@ -42,7 +42,7 @@ function App() {
     setCurrentView('canvas');
   };
 
-  const handleUseTemplate = (templateId: string) => {
+  const handleUseTemplate = (_templateId: string) => {
     setSelectedCaseId(null);
     setCurrentView('canvas');
   };

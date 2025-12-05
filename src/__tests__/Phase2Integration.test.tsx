@@ -11,7 +11,6 @@ import { workspaceStateService } from '../services/WorkspaceStateService';
 import { agentOutputListener } from '../services/AgentOutputListener';
 import { workflowEventListener } from '../services/WorkflowEventListener';
 import { SystemMapperOutput } from '../types/agent-output';
-import { WorkflowProgress } from '../types/workflow-sdui';
 
 // Mock dependencies
 vi.mock('../services/CanvasSchemaService');

@@ -14,7 +14,6 @@ import ResetPasswordPage from './views/Auth/ResetPasswordPage';
 import App from './App';
 import { LaunchReadinessDashboard } from './views/LaunchReadinessDashboard';
 import { BetaFeedbackWidget } from './components/Feedback/BetaFeedbackWidget';
-import ApiDocsPage from './views/ApiDocsPage';
 
 export function AppRoutes() {
   return (
