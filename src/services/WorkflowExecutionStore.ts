@@ -17,9 +17,23 @@ export interface WorkflowExecution {
 /**
  * In-memory store for tracking workflow execution status.
  * 
- * WARNING: This is an in-memory implementation and status will be lost on service restart.
- * For production use, consider using a persistent store (Redis, database) to maintain
- * workflow state across restarts and instances.
+ * ⚠️ IMPORTANT LIMITATION:
+ * This is an in-memory implementation and workflow status will be LOST on:
+ * - Service restart
+ * - Process crash
+ * - Deployment
+ * - Running multiple instances (no shared state)
+ * 
+ * For production deployments with high availability requirements:
+ * 1. Replace this with Redis (see src/middleware/llmRateLimiter.ts for Redis client example)
+ * 2. Use a database table with indexed lookups
+ * 3. Use the existing workflow state management system
+ * 
+ * This implementation is suitable for:
+ * - Development environments
+ * - Single-instance deployments
+ * - Non-critical workflow pause/halt features
+ * - Testing
  * 
  * @example
  * ```typescript

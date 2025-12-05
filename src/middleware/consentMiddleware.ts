@@ -8,18 +8,25 @@ export type ConsentRegistry = {
 };
 
 /**
- * Default consent registry that always denies consent unless explicitly configured.
- * This fail-safe approach ensures consent checks are intentionally configured.
+ * Default consent registry behavior configurable via CONSENT_DEFAULT_MODE environment variable:
+ * - 'strict': Denies all requests by default (recommended for production)
+ * - 'permissive': Allows all requests with warnings (for development/testing)
  * 
  * In production, replace this with a real consent registry that checks a database
  * or service for actual consent records.
  */
 const defaultRegistry: ConsentRegistry = {
   hasConsent: async (tenantId: string, scope: string) => {
-    // For now, allow all requests - but log a warning
-    // In production, this should check actual consent records
-    console.warn(`Using default consent registry for tenant=${tenantId}, scope=${scope}. Configure a proper registry for production.`);
-    return true;
+    const mode = process.env.CONSENT_DEFAULT_MODE || 'strict';
+    
+    if (mode === 'permissive') {
+      console.warn(`[CONSENT] Using permissive default for tenant=${tenantId}, scope=${scope}. Configure a proper registry for production.`);
+      return true;
+    }
+    
+    // Strict mode - deny by default
+    console.warn(`[CONSENT] Denied by default registry for tenant=${tenantId}, scope=${scope}. Set CONSENT_DEFAULT_MODE=permissive or configure a proper registry.`);
+    return false;
   }
 };
 
@@ -27,7 +34,7 @@ const defaultRegistry: ConsentRegistry = {
  * Middleware that enforces consent checks for specific operation scopes.
  * 
  * @param scope - The scope/operation requiring consent (e.g., 'knowledge.upload', 'llm.chat')
- * @param registry - Registry implementation for checking consent. Defaults to a permissive registry with warnings.
+ * @param registry - Registry implementation for checking consent. Defaults to environment-configurable registry.
  * @returns Express middleware that returns 403 if consent is not granted
  * 
  * @example
@@ -40,6 +47,10 @@ const defaultRegistry: ConsentRegistry = {
  * };
  * 
  * router.post('/upload', requireConsent('knowledge.upload', myRegistry), handler);
+ * 
+ * // Or use default with environment control:
+ * // Set CONSENT_DEFAULT_MODE=permissive for development
+ * router.post('/upload', requireConsent('knowledge.upload'), handler);
  * ```
  */
 export function requireConsent(scope: string, registry: ConsentRegistry = defaultRegistry): RequestHandler {

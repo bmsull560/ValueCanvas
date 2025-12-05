@@ -71,11 +71,20 @@ router.post(
         contentLength: content.length
       });
 
-      // Store in semantic memory
+      // Store in semantic memory with proper metadata structure
       const memoryId = await semanticMemory.store({
         type,
         content,
-        metadata: lineageMetadata
+        metadata: {
+          agentType: 'knowledge_upload', // Required field
+          timestamp: new Date(), // Required field
+          userId: (req as any).userId,
+          // Include lineage fields in metadata
+          source_origin: lineageMetadata.source_origin,
+          data_sensitivity_level: lineageMetadata.data_sensitivity_level,
+          // Include any additional metadata
+          ...lineageMetadata
+        }
       });
 
       logger.info('Knowledge stored successfully', {

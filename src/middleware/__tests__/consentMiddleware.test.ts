@@ -94,22 +94,50 @@ describe('consentMiddleware', () => {
     });
 
     it('uses default registry when none is provided', async () => {
+      // Set to permissive mode for this test
+      const originalMode = process.env.CONSENT_DEFAULT_MODE;
+      process.env.CONSENT_DEFAULT_MODE = 'permissive';
+
       const req = mockReq({ headers: { 'x-tenant-id': 'tenant-123' } });
       const res = mockRes();
       const middleware = requireConsent('test.scope');
 
-      // Default registry allows all with warning
+      // Default registry allows all with warning in permissive mode
       const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
       await middleware(req, res, next);
 
       expect(consoleWarnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Using default consent registry')
+        expect.stringContaining('Using permissive default')
       );
       expect(next).toHaveBeenCalled();
       expect(res.status).not.toHaveBeenCalled();
 
       consoleWarnSpy.mockRestore();
+      process.env.CONSENT_DEFAULT_MODE = originalMode;
+    });
+
+    it('denies by default in strict mode', async () => {
+      // Set to strict mode (or leave unset)
+      const originalMode = process.env.CONSENT_DEFAULT_MODE;
+      process.env.CONSENT_DEFAULT_MODE = 'strict';
+
+      const req = mockReq({ headers: { 'x-tenant-id': 'tenant-123' } });
+      const res = mockRes();
+      const middleware = requireConsent('test.scope');
+
+      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      await middleware(req, res, next);
+
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Denied by default')
+      );
+      expect(next).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(403);
+
+      consoleWarnSpy.mockRestore();
+      process.env.CONSENT_DEFAULT_MODE = originalMode;
     });
 
     it('handles synchronous registry implementation', async () => {
