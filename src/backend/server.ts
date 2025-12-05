@@ -14,6 +14,7 @@ import { createVersionedApiRouter } from './versioning';
 import { requestAuditMiddleware } from '../middleware/requestAuditMiddleware';
 import { latencyMetricsMiddleware, getLatencySnapshot } from '../middleware/latencyMetricsMiddleware';
 import { getMetricsRegistry, metricsMiddleware } from '../middleware/metricsMiddleware';
+import docsRouter from '../api/docs';
 
 import { settings } from '../config/settings';
 
@@ -65,6 +66,10 @@ app.use('/api', apiRouter);
 app.use('/api/agents', agentsRouter);
 app.use('/api', workflowRouter);
 app.use('/api/documents', documentRouter);
+
+// API documentation routes
+app.use('/api', docsRouter);
+app.get('/docs/api', (_req, res) => res.redirect('/api/docs'));
 
 // Error handler
 app.use(
