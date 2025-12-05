@@ -39,7 +39,7 @@ router.post(
     try {
       const { 
         content, 
-        type = 'knowledge',
+        type = 'opportunity', // Default to 'opportunity' type for general knowledge uploads
         source_origin, 
         data_sensitivity_level,
         metadata = {},
