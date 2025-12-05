@@ -1,7 +1,12 @@
 import { Router, Request, Response } from 'express';
 import { enforceLineage } from '../middleware/lineageValidationMiddleware';
 import { requireConsent } from '../middleware/consentMiddleware';
-import { securityHeadersMiddleware } from '../middleware/securityMiddleware';
+import {
+  csrfProtectionMiddleware,
+  securityHeadersMiddleware,
+  sessionTimeoutMiddleware,
+} from '../middleware/securityMiddleware';
+import { rateLimiters } from '../middleware/rateLimiter';
 import { logger } from '../utils/logger';
 
 const router = Router();
@@ -9,6 +14,9 @@ router.use(securityHeadersMiddleware);
 
 router.post(
   '/upload',
+  rateLimiters.standard,
+  csrfProtectionMiddleware,
+  sessionTimeoutMiddleware,
   enforceLineage(),
   requireConsent('knowledge.upload'),
   async (req: Request, res: Response) => {
