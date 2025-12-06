@@ -59,24 +59,29 @@ export class ModelService {
     const valueTreeId = valueTreeData.id;
     
     // Log provenance for value_tree creation
-    await this.provenanceRepo.create({
-      session_id: this.context.sessionId || 'unknown-session',
-      agent_id: 'target-agent',
-      artifact_type: 'value_tree',
-      artifact_id: valueTreeId,
-      action: 'created',
-      reasoning_trace: output.businessCase?.reasoning || 'Value tree created from target agent output',
-      artifact_data: {
-        name: valueTreeData.name,
-        value_case_id: valueCaseId,
-        version: valueTreeData.version
-      },
-      input_variables: {},
-      output_snapshot: {
-        node_count: output.businessCase.nodes?.length || 0,
-        link_count: output.businessCase.links?.length || 0
-      }
-    });
+    try {
+      await this.provenanceRepo.create({
+        session_id: this.context.sessionId || 'unknown-session',
+        agent_id: 'target-agent',
+        artifact_type: 'value_tree',
+        artifact_id: valueTreeId,
+        action: 'created',
+        reasoning_trace: output.businessCase?.reasoning || 'Value tree created from target agent output',
+        artifact_data: {
+          name: valueTreeData.name,
+          value_case_id: valueCaseId,
+          version: valueTreeData.version
+        },
+        input_variables: {},
+        output_snapshot: {
+          node_count: output.businessCase.nodes?.length || 0,
+          link_count: output.businessCase.links?.length || 0
+        }
+      });
+    } catch (provenanceError) {
+      // Log but don't fail the operation if provenance logging fails
+      console.error('Failed to log provenance for value_tree:', provenanceError);
+    }
 
     // 2. Create Value Tree Nodes and Links
     for (const node of output.businessCase.nodes) {
@@ -114,27 +119,32 @@ export class ModelService {
     const roiModelId = roiModelData.id;
     
     // Log provenance for roi_model creation
-    await this.provenanceRepo.create({
-      session_id: this.context.sessionId || 'unknown-session',
-      agent_id: 'target-agent',
-      artifact_type: 'roi_model',
-      artifact_id: roiModelId,
-      action: 'created',
-      reasoning_trace: output.businessCase?.reasoning || 'ROI model created from target agent output',
-      artifact_data: {
-        value_tree_id: valueTreeId,
-        name: roiModelData.name
-      },
-      input_variables: {
-        value_tree_id: valueTreeId
-      },
-      output_snapshot: {
-        total_benefit: roiModelData.total_benefit,
-        total_cost: roiModelData.total_cost,
-        net_value: roiModelData.net_value,
-        roi_percentage: roiModelData.roi_percentage
-      }
-    });
+    try {
+      await this.provenanceRepo.create({
+        session_id: this.context.sessionId || 'unknown-session',
+        agent_id: 'target-agent',
+        artifact_type: 'roi_model',
+        artifact_id: roiModelId,
+        action: 'created',
+        reasoning_trace: output.businessCase?.reasoning || 'ROI model created from target agent output',
+        artifact_data: {
+          value_tree_id: valueTreeId,
+          name: roiModelData.name
+        },
+        input_variables: {
+          value_tree_id: valueTreeId
+        },
+        output_snapshot: {
+          total_benefit: roiModelData.total_benefit,
+          total_cost: roiModelData.total_cost,
+          net_value: roiModelData.net_value,
+          roi_percentage: roiModelData.roi_percentage
+        }
+      });
+    } catch (provenanceError) {
+      // Log but don't fail the operation if provenance logging fails
+      console.error('Failed to log provenance for roi_model:', provenanceError);
+    }
 
     // 4. Create ROI Model Calculations
     for (const calc of output.businessCase.calculations) {
@@ -152,23 +162,36 @@ export class ModelService {
       
       // Log provenance for calculation creation
       if (calcData) {
-        await this.provenanceRepo.create({
-          session_id: this.context.sessionId || 'unknown-session',
-          agent_id: 'target-agent',
-          artifact_type: 'roi_calculation',
-          artifact_id: calcData.id,
-          action: 'created',
-          reasoning_trace: calc.reasoning_trace || output.businessCase?.reasoning || 'ROI calculation created',
-          artifact_data: {
-            roi_model_id: roiModelId,
-            calculation_type: calc.calculation_type
-          },
-          input_variables: calc.input_variables || {},
-          output_snapshot: {
-            formula: calc.formula,
-            result_value: calc.result_value
+        try {
+          // Convert input_variables array to Record for provenance logging
+          const inputVarsRecord: Record<string, any> = {};
+          if (Array.isArray(calc.input_variables)) {
+            calc.input_variables.forEach((v, idx) => {
+              inputVarsRecord[v.name || `var_${idx}`] = v.source || v.description || 'unknown';
+            });
           }
-        });
+          
+          await this.provenanceRepo.create({
+            session_id: this.context.sessionId || 'unknown-session',
+            agent_id: 'target-agent',
+            artifact_type: 'roi_calculation',
+            artifact_id: calcData.id,
+            action: 'created',
+            reasoning_trace: calc.reasoning_trace || output.businessCase?.reasoning || 'ROI calculation created',
+            artifact_data: {
+              roi_model_id: roiModelId,
+              calculation_type: calc.calculation_type
+            },
+            input_variables: inputVarsRecord,
+            output_snapshot: {
+              formula: calc.formula,
+              result_value: calc.result_value
+            }
+          });
+        } catch (provenanceError) {
+          // Log but don't fail the operation if provenance logging fails
+          console.error('Failed to log provenance for roi_calculation:', provenanceError);
+        }
       }
     }
 
@@ -182,28 +205,33 @@ export class ModelService {
     const valueCommitId = commitData.id;
     
     // Log provenance for value_commit creation
-    await this.provenanceRepo.create({
-      session_id: this.context.sessionId || 'unknown-session',
-      agent_id: 'target-agent',
-      artifact_type: 'value_commit',
-      artifact_id: valueCommitId,
-      action: 'created',
-      reasoning_trace: output.businessCase?.reasoning || 'Value commit created from target agent output',
-      artifact_data: {
-        value_tree_id: valueTreeId,
-        value_case_id: valueCaseId,
-        target_date: commitData.target_date,
-        status: commitData.status
-      },
-      input_variables: {
-        value_tree_id: valueTreeId,
-        roi_model_id: roiModelId
-      },
-      output_snapshot: {
-        committed_value: commitData.committed_value,
-        confidence_level: commitData.confidence_level
-      }
-    });
+    try {
+      await this.provenanceRepo.create({
+        session_id: this.context.sessionId || 'unknown-session',
+        agent_id: 'target-agent',
+        artifact_type: 'value_commit',
+        artifact_id: valueCommitId,
+        action: 'created',
+        reasoning_trace: output.businessCase?.reasoning || 'Value commit created from target agent output',
+        artifact_data: {
+          value_tree_id: valueTreeId,
+          value_case_id: valueCaseId,
+          target_date: commitData.target_date,
+          status: commitData.status
+        },
+        input_variables: {
+          value_tree_id: valueTreeId,
+          roi_model_id: roiModelId
+        },
+        output_snapshot: {
+          committed_value: commitData.committed_value,
+          confidence_level: commitData.confidence_level
+        }
+      });
+    } catch (provenanceError) {
+      // Log but don't fail the operation if provenance logging fails
+      console.error('Failed to log provenance for value_commit:', provenanceError);
+    }
 
     // 6. Create KPI Targets
     for (const target of output.businessCase.kpi_targets) {
