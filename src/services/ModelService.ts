@@ -60,7 +60,7 @@ export class ModelService {
     
     // Log provenance for value_tree creation
     await this.provenanceRepo.create({
-      session_id: this.context.sessionId || '',
+      session_id: this.context.sessionId || 'unknown-session',
       agent_id: 'target-agent',
       artifact_type: 'value_tree',
       artifact_id: valueTreeId,
@@ -115,7 +115,7 @@ export class ModelService {
     
     // Log provenance for roi_model creation
     await this.provenanceRepo.create({
-      session_id: this.context.sessionId || '',
+      session_id: this.context.sessionId || 'unknown-session',
       agent_id: 'target-agent',
       artifact_type: 'roi_model',
       artifact_id: roiModelId,
@@ -138,7 +138,7 @@ export class ModelService {
 
     // 4. Create ROI Model Calculations
     for (const calc of output.businessCase.calculations) {
-      const { data: calcData } = await this.roiModelCalcRepo.create({
+      const { data: calcData, error: calcError } = await this.roiModelCalcRepo.create({
           roi_model_id: roiModelId,
           ...calc,
           input_variables: calc.input_variables || [],
@@ -146,10 +146,14 @@ export class ModelService {
           reasoning_trace: calc.reasoning_trace || output.businessCase.reasoning
       });
       
+      if (calcError) {
+        throw new Error(`Failed to create calculation: ${calcError.message}`);
+      }
+      
       // Log provenance for calculation creation
       if (calcData) {
         await this.provenanceRepo.create({
-          session_id: this.context.sessionId || '',
+          session_id: this.context.sessionId || 'unknown-session',
           agent_id: 'target-agent',
           artifact_type: 'roi_calculation',
           artifact_id: calcData.id,
@@ -179,7 +183,7 @@ export class ModelService {
     
     // Log provenance for value_commit creation
     await this.provenanceRepo.create({
-      session_id: this.context.sessionId || '',
+      session_id: this.context.sessionId || 'unknown-session',
       agent_id: 'target-agent',
       artifact_type: 'value_commit',
       artifact_id: valueCommitId,
