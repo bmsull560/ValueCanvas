@@ -11,7 +11,7 @@ import { ValueTreeNodeRepository } from '../repositories/ValueTreeNodeRepository
 import { ValueTreeLinkRepository } from '../repositories/ValueTreeLinkRepository';
 import { RoiModelCalculationRepository } from '../repositories/RoiModelCalculationRepository';
 import { ValueCommitRepository } from '../repositories/ValueCommitRepository';
-// We will also need an audit/provenance service, but that's a later refactoring.
+import { ProvenanceAuditRepository } from '../repositories/ProvenanceAuditRepository';
 
 export class ModelService {
   private context: LifecycleContext;
@@ -22,6 +22,7 @@ export class ModelService {
   private valueTreeLinkRepo: ValueTreeLinkRepository;
   private roiModelCalcRepo: RoiModelCalculationRepository;
   private valueCommitRepo: ValueCommitRepository;
+  private provenanceRepo: ProvenanceAuditRepository;
 
   constructor(context: LifecycleContext) {
     if (!context.organizationId) {
@@ -35,6 +36,7 @@ export class ModelService {
     this.valueTreeLinkRepo = new ValueTreeLinkRepository(context.organizationId);
     this.roiModelCalcRepo = new RoiModelCalculationRepository(context.organizationId);
     this.valueCommitRepo = new ValueCommitRepository(context.organizationId);
+    this.provenanceRepo = new ProvenanceAuditRepository();
   }
 
   /**
@@ -55,7 +57,26 @@ export class ModelService {
     });
     if (treeError) throw new Error(`Failed to create value tree: ${treeError.message}`);
     const valueTreeId = valueTreeData.id;
-    // TODO: Log provenance for value_tree creation
+    
+    // Log provenance for value_tree creation
+    await this.provenanceRepo.create({
+      session_id: this.context.sessionId || '',
+      agent_id: 'target-agent',
+      artifact_type: 'value_tree',
+      artifact_id: valueTreeId,
+      action: 'created',
+      reasoning_trace: output.businessCase?.reasoning || 'Value tree created from target agent output',
+      artifact_data: {
+        name: valueTreeData.name,
+        value_case_id: valueCaseId,
+        version: valueTreeData.version
+      },
+      input_variables: {},
+      output_snapshot: {
+        node_count: output.businessCase.nodes?.length || 0,
+        link_count: output.businessCase.links?.length || 0
+      }
+    });
 
     // 2. Create Value Tree Nodes and Links
     for (const node of output.businessCase.nodes) {
@@ -91,18 +112,60 @@ export class ModelService {
     });
     if (roiError) throw new Error(`Failed to create ROI model: ${roiError.message}`);
     const roiModelId = roiModelData.id;
-    // TODO: Log provenance for roi_model creation
+    
+    // Log provenance for roi_model creation
+    await this.provenanceRepo.create({
+      session_id: this.context.sessionId || '',
+      agent_id: 'target-agent',
+      artifact_type: 'roi_model',
+      artifact_id: roiModelId,
+      action: 'created',
+      reasoning_trace: output.businessCase?.reasoning || 'ROI model created from target agent output',
+      artifact_data: {
+        value_tree_id: valueTreeId,
+        name: roiModelData.name
+      },
+      input_variables: {
+        value_tree_id: valueTreeId
+      },
+      output_snapshot: {
+        total_benefit: roiModelData.total_benefit,
+        total_cost: roiModelData.total_cost,
+        net_value: roiModelData.net_value,
+        roi_percentage: roiModelData.roi_percentage
+      }
+    });
 
     // 4. Create ROI Model Calculations
     for (const calc of output.businessCase.calculations) {
-      await this.roiModelCalcRepo.create({
+      const { data: calcData } = await this.roiModelCalcRepo.create({
           roi_model_id: roiModelId,
           ...calc,
           input_variables: calc.input_variables || [],
           source_references: calc.source_references || {},
           reasoning_trace: calc.reasoning_trace || output.businessCase.reasoning
       });
-      // TODO: Log provenance for calculation creation
+      
+      // Log provenance for calculation creation
+      if (calcData) {
+        await this.provenanceRepo.create({
+          session_id: this.context.sessionId || '',
+          agent_id: 'target-agent',
+          artifact_type: 'roi_calculation',
+          artifact_id: calcData.id,
+          action: 'created',
+          reasoning_trace: calc.reasoning_trace || output.businessCase?.reasoning || 'ROI calculation created',
+          artifact_data: {
+            roi_model_id: roiModelId,
+            calculation_type: calc.calculation_type
+          },
+          input_variables: calc.input_variables || {},
+          output_snapshot: {
+            formula: calc.formula,
+            result_value: calc.result_value
+          }
+        });
+      }
     }
 
     // 5. Create Value Commit
@@ -113,7 +176,30 @@ export class ModelService {
     });
     if (commitError) throw new Error(`Failed to create value commit: ${commitError.message}`);
     const valueCommitId = commitData.id;
-    // TODO: Log provenance for value_commit creation
+    
+    // Log provenance for value_commit creation
+    await this.provenanceRepo.create({
+      session_id: this.context.sessionId || '',
+      agent_id: 'target-agent',
+      artifact_type: 'value_commit',
+      artifact_id: valueCommitId,
+      action: 'created',
+      reasoning_trace: output.businessCase?.reasoning || 'Value commit created from target agent output',
+      artifact_data: {
+        value_tree_id: valueTreeId,
+        value_case_id: valueCaseId,
+        target_date: commitData.target_date,
+        status: commitData.status
+      },
+      input_variables: {
+        value_tree_id: valueTreeId,
+        roi_model_id: roiModelId
+      },
+      output_snapshot: {
+        committed_value: commitData.committed_value,
+        confidence_level: commitData.confidence_level
+      }
+    });
 
     // 6. Create KPI Targets
     for (const target of output.businessCase.kpi_targets) {
