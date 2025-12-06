@@ -181,7 +181,10 @@ describe('ModelService', () => {
               calculation_type: 'revenue',
               formula: 'A * B',
               result_value: 10000,
-              input_variables: { A: 100, B: 100 },
+              input_variables: [
+                { name: 'A', source: 'revenue_assumption', description: 'Annual revenue' },
+                { name: 'B', source: 'multiplier', description: 'Growth multiplier' }
+              ],
               reasoning_trace: 'Calculation reasoning'
             }
           ],
@@ -228,7 +231,11 @@ describe('ModelService', () => {
       expect(calcProvenanceCall).toBeDefined();
       expect(calcProvenanceCall[0].artifact_id).toBe('calc-123');
       expect(calcProvenanceCall[0].action).toBe('created');
-      expect(calcProvenanceCall[0].input_variables).toEqual({ A: 100, B: 100 });
+      // Input variables should be converted from array to Record
+      expect(calcProvenanceCall[0].input_variables).toEqual({
+        A: 'revenue_assumption',
+        B: 'multiplier'
+      });
     });
   });
 });
